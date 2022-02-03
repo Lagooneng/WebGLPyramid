@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec4 vPosition;
+attribute vec4 vNormal;
+attribute vec2 vTexCoord;
+
+varying vec3 N, L, E;
+varying vec2 fTexCoord;
+
+uniform vec3 theta;
+uniform vec3 d;
+uniform vec3 u;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform vec4 lightPosition;
+uniform mat3 normalMatrix;
+
+void main()
+{
+    vec3 angles = radians( theta );
+    vec3 c = cos( angles );
+    vec3 s = sin( angles );
+
+    mat4 rx = mat4( 1.0,  0.0,  0.0, 0.0,
+                    0.0,  c.x,  s.x, 0.0,
+                    0.0, -s.x,  c.x, 0.0,
+                    0.0,  0.0,  0.0, 1.0 );
+
+    mat4 ry = mat4( c.y, 0.0, -s.y, 0.0,
+                    0.0, 1.0,  0.0, 0.0,
+                    s.y, 0.0,  c.y, 0.0,
+                    0.0, 0.0,  0.0, 1.0 );
+
+
+    mat4 rz = mat4( c.z, s.z, 0.0, 0.0,
+                    -s.z,  c.z, 0.0, 0.0,
+                    0.0,  0.0, 1.0, 0.0,
+                    0.0,  0.0, 0.0, 1.0 );
+
+    mat4 T = mat4(  1.0, 0.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0, 0.0,
+                    0.0, 0.0, 1.0, 0.0,
+                    d.x, d.y, d.z, 1 );
+
+    mat4 S = mat4(  u.x, 0.0, 0.0, 0.0,
+                    0.0, u.y, 0.0, 0.0,
+                    0.0, 0.0, u.z, 0.0,
+                    0.0, 0.0, 0.0, 1.0 );
+
+    vec4 light2 = lightPosition;
+    light2 = S * T * rz * ry * rx * light2;
+
+    vec3 pos = (modelViewMatrix * vPosition).xyz;
+    
+    // check for directional light
+    
+    if(light2.w == 0.0) L = normalize(light2.xyz);
+    else L = normalize( light2.xyz - pos );
+    
+    E =  -normalize(pos);
+    N = normalize( normalMatrix*vNormal.xyz);
+
+    fTexCoord = vTexCoord;
+
+    gl_Position =  S * T * rz * ry * rx * vPosition;
+    gl_Position.z = -gl_Position.z;
+    gl_Position = projectionMatrix * modelViewMatrix * gl_Position;
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+
+varying vec3 N, L, E;
+varying vec2 fTexCoord;
+
+uniform sampler2D texture;
+uniform sampler2D texture2;
+uniform int q;
+uniform vec4 ambientProduct;
+uniform vec4 diffuseProduct;
+uniform vec4 specularProduct;
+uniform float shininess;
+uniform int choice;
+
+
+void main()
+{
+
+    if(q==0) {
+        vec4 fColor;
+        vec3 H = normalize( L + E );
+        vec4 ambient = ambientProduct;
+
+        float Kd = max( dot(L, N), 0.0 );
+        vec4 diffuse = Kd * diffuseProduct;
+
+        float Ks = pow( max(dot(N, H), 0.0), shininess );
+        vec4 specular = Ks * specularProduct;
+        
+        if( dot(L, N) < 0.0 ) specular = vec4(0.0, 0.0, 0.0, 1.0);
+
+        fColor = ambient + diffuse + specular;
+        fColor.a = 1.0;
+
+        if(choice != 0) {
+            gl_FragColor = fColor * texture2D(texture, fTexCoord) * texture2D(texture2, fTexCoord);
+        }
+        else {
+            gl_FragColor = fColor * texture2D(texture, fTexCoord);
+        }
+    }
+    else gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    
+}
+</script>
+
+<script type="text/javascript" src="../Common/webgl-utils.js"></script>
+<script type="text/javascript" src="../Common/initShaders.js"></script>
+<script type="text/javascript" src="../Common/MV.js"></script>
+<script type="text/javascript" src="정현우_32204236_과제3.js"></script>
+</head>
+
+<body>
+    <div>
+        radius 0.5<input id="radius" type="range" min="0.5" max="10" step="0.5" value="4">10
+        theta -90<input id="theta2" type="range" min="-90" max="90" step="5" value="0">90
+        phi -90<input id="phi" type="range" min="-90" max="90" step="5" value="0">90
+    </div>
+    <div>
+        fov 10<input id="fovy" type="range" min="10" max="120" step="5" value="45">120
+        aspect 0.5<input id="aspect" type="range" min="0.5" max="2" step="0.1" value="1">2
+        zNear 0.01<input id="near" type="range" min="0.01" max="3" step="0.1" value="0.01">3
+        zFar 3<input id="far" type="range" min="3" max="10" step="1" value="5">10
+    </div>
+    <hr>
+    <canvas id="gl-canvas" width="512" height="512">
+    Oops ... your browser doesn't support the HTML5 canvas element
+    </canvas>
+    <div style="display: inline-block;">
+        lightX -1<input id = "lightX" type="range" min="-1" max="1" step="1" value="0">1
+        lightY 1<input id = "lightY" type="range" min="1" max="3" step="1" value="2">3
+        lightZ -1<input id = "lightZ" type="range" min="-1" max="1" step="1" value="0">1
+        <hr>
+        lightAmbientR 0<input id = "lightAR" type="range" min="0" max="1" step="0.1" value="0.2">1
+        lightAmbientG 0<input id = "lightAG" type="range" min="0" max="1" step="0.1" value="0.2">1
+        lightAmbientB 0<input id = "lightAB" type="range" min="0" max="1" step="0.1" value="0.2">1
+        <hr>
+        lightDiffuseR 0<input id = "lightDR" type="range" min="0" max="1" step="0.1" value="1.0">1
+        lightDiffuseG 0<input id = "lightDG" type="range" min="0" max="1" step="0.1" value="1.0">1
+        lightDiffuseB 0<input id = "lightDB" type="range" min="0" max="1" step="0.1" value="1.0">1
+        <hr>
+        lightSpecularR 0<input id = "lightSR" type="range" min="0" max="1" step="0.1" value="1.0">1
+        lightSpecularG 0<input id = "lightSG" type="range" min="0" max="1" step="0.1" value="1.0">1
+        lightSpecularB 0<input id = "lightSB" type="range" min="0" max="1" step="0.1" value="1.0">1
+        <hr>
+        materialAmbientR 0<input id = "materialAR" type="range" min="0" max="1" step="0.1" value="1.0">1
+        materialAmbientG 0<input id = "materialAG" type="range" min="0" max="1" step="0.1" value="0.0">1
+        materialAmbientB 0<input id = "materialAB" type="range" min="0" max="1" step="0.1" value="1.0">1
+        <hr>
+        materialDiffuseR 0<input id = "materialDR" type="range" min="0" max="1" step="0.1" value="1.0">1
+        materialDiffuseG 0<input id = "materialDG" type="range" min="0" max="1" step="0.1" value="0.8">1
+        materialDiffuseB 0<input id = "materialDB" type="range" min="0" max="1" step="0.1" value="0.0">1
+        <hr>
+        materialSpecularR 0<input id = "materialSR" type="range" min="0" max="1" step="0.1" value="1.0">1
+        materialSpecularG 0<input id = "materialSG" type="range" min="0" max="1" step="0.1" value="1.0">1
+        materialSpecularB 0<input id = "materialSB" type="range" min="0" max="1" step="0.1" value="1.0">1
+        <hr>
+        shininess 20<input id = "shininess" type="range" min="20" max="200" step="20" value="20">200
+        <hr>
+        texture1에서는 texSize 변경 texture2, 3에서는 numChecks 변경
+        <button id = "texInc">Increase(최대 512)</button> <button id = "texDec">Decrease(최소 4)</button>
+        <hr>
+        <button id = "tex1">texture1</button>
+        <button id = "tex2">texture2</button>
+        <button id = "tex3">texture3</button>
+    </div>
+    <hr>
+    <div>
+        xRoatate -90<input id="xthetaSlider" type="range" min="-90" max="90" step="10" value="0">90
+        yRotate -90<input id="ythetaSlider" type="range" min="-90" max="90" step="10" value="0">90
+        zRotate -90<input id="zthetaSlider" type="range" min="-90" max="90" step="10" value="0">90
+    </div>
+    <div>
+        x이동 -1<input id="xtranslation" type="range" min="-1" max="1" step="0.2" value="0">1
+        y이동 -0.6<input id="ytranslation" type="range" min="-0.6" max="1" step="0.2" value="0">1
+        z이동 -1<input id="ztranslation" type="range" min="-1" max="1" step="0.2" value="0">1
+    </div>
+    <div>
+        x방향 확대/축소 1/2<input id = "xScaling" type="range" min="1/2" max="2" step="0.2" value="1">2
+        y방향 확대/축소 1/2<input id = "yScaling" type="range" min="1/2" max="2" step="0.2" value="1">2
+        z방향 확대/축소 1/2<input id = "zScaling" type="range" min="1/2" max="2" step="0.2" value="1">2
+    </div>
+    
+</body>
+</html>
